@@ -5,3 +5,4 @@ __pycache__/
 runs/
 data_index/raw/
 .DS_Store
+*.egg-info/
