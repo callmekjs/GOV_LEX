@@ -5,9 +5,14 @@ src/govlexops.egg-info/SOURCES.txt
 src/govlexops.egg-info/dependency_links.txt
 src/govlexops.egg-info/top_level.txt
 src/govlexops/core/__init__.py
+src/govlexops/core/logging.py
+src/govlexops/core/run_context.py
 src/govlexops/etl/__init__.py
+src/govlexops/etl/pipeline.py
 src/govlexops/etl/ingest/__init__.py
 src/govlexops/etl/normalize/__init__.py
 src/govlexops/qa/__init__.py
 src/govlexops/schemas/__init__.py
+src/govlexops/schemas/legal_document.py
 src/govlexops/search/__init__.py
+tests/test_schema_validation.py
