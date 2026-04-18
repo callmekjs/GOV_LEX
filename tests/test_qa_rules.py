@@ -116,3 +116,38 @@ def test_r02_blocks_empty_content_hash():
     engine = QARuleEngine()
     assert engine.validate(doc) is False
     assert engine.get_summary()["R02"] == 1
+
+def test_global_failure_log_is_cumulative(tmp_path, monkeypatch):
+    """
+    report가 run별 기록 외에 data_index/quality/failures.jsonl 에도
+    누적 append 되는지 확인.
+    """
+    import json
+    from govlexops.qa.report import generate_quality_report
+    from govlexops.qa.rules import QARuleEngine
+
+    # tmp_path 로 cwd 이동 → data_index가 진짜 쓰이는지 격리된 곳에서 검증
+    monkeypatch.chdir(tmp_path)
+
+    # run1
+    run1 = tmp_path / "runs" / "run_test_1"
+    run1.mkdir(parents=True)
+    engine1 = QARuleEngine()
+    engine1.validate(_make_doc(source_id="a", content="same"))
+    engine1.validate(_make_doc(source_id="b", content="same"))  # R01
+    generate_quality_report(run1, engine1, total_input=2, total_passed=1)
+
+    # run2
+    run2 = tmp_path / "runs" / "run_test_2"
+    run2.mkdir(parents=True)
+    engine2 = QARuleEngine()
+    engine2.validate(_make_doc(source_id="c", content="same2"))
+    engine2.validate(_make_doc(source_id="d", content="same2"))  # R01
+    generate_quality_report(run2, engine2, total_input=2, total_passed=1)
+
+    global_log = tmp_path / "data_index" / "quality" / "failures.jsonl"
+    lines = global_log.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2  # 두 번 실행분이 누적됨
+
+    run_ids = {json.loads(l)["run_id"] for l in lines}
+    assert run_ids == {"run_test_1", "run_test_2"}

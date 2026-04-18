@@ -61,10 +61,38 @@ def generate_quality_report(
     # 파일 쓰기
     report_path.write_text("\n".join(lines), encoding="utf-8")
 
-    # ── quality_failures.jsonl도 같이 생성 ──
+    # ── 이번 run 전용 실패 파일 ──
     failures_path = run_dir / "quality_failures.jsonl"
     with open(failures_path, "w", encoding="utf-8") as f:
         for failure in failures:
             f.write(json.dumps(failure, ensure_ascii=False) + "\n")
 
+    # ── 전역 누적 실패 파일 (운영 대시보드용) ──
+    _append_to_global_failure_log(run_dir=run_dir, failures=failures)
+
     return report_path
+
+
+def _append_to_global_failure_log(run_dir: Path, failures: list[dict]) -> Path:
+    """
+    모든 실행의 품질 실패를 한 파일에 누적 기록합니다.
+    경로: data_index/quality/failures.jsonl
+    각 줄에 run_id와 written_at을 덧붙여 추적 가능하게 합니다.
+    """
+    global_dir = Path("data_index/quality")
+    global_dir.mkdir(parents=True, exist_ok=True)
+    global_path = global_dir / "failures.jsonl"
+
+    run_id = run_dir.name
+    written_at = datetime.now().isoformat()
+
+    with open(global_path, "a", encoding="utf-8") as f:
+        for failure in failures:
+            record = {
+                **failure,
+                "run_id": run_id,
+                "written_at": written_at,
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    return global_path

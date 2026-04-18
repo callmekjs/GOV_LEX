@@ -4,5 +4,6 @@ __pycache__/
 .env
 runs/
 data_index/raw/
+data_index/quality/
 .DS_Store
 *.egg-info/
