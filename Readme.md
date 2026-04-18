@@ -264,7 +264,7 @@ GovLex-Ops/
 ├── src/govlexops/
 │   ├── core/
 │   │   ├── run_context.py
-│   │   └── logging.py
+│   │   └── event_log.py
 │   ├── schemas/
 │   │   └── legal_document.py
 │   ├── etl/

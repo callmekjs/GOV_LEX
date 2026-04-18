@@ -1,7 +1,7 @@
 """GovLex-Ops 파이프라인. Day 3: QA 룰 + 품질 리포트 추가."""
 from datetime import date
 from govlexops.core.run_context import create_run_context
-from govlexops.core.logging import log_event
+from govlexops.core.event_log import log_event
 from govlexops.schemas.legal_document import LegalDocument, make_content_hash
 from govlexops.qa.rules import QARuleEngine
 from govlexops.qa.report import generate_quality_report
