@@ -68,3 +68,51 @@ def test_failures_list():
     assert len(failures) == 1
     assert failures[0]["rule_id"] == "R01"
     assert failures[0]["source_id"] == "b"
+
+def test_hash_ignores_whitespace_differences():
+    """공백/줄바꿈이 달라도 같은 해시가 나와야 한다."""
+    a = "안녕  세상"
+    b = "안녕\n세상"
+    c = " 안녕 세상 "
+    assert make_content_hash(a) == make_content_hash(b) == make_content_hash(c)
+def test_hash_ignores_unicode_form_differences():
+    """같은 한글인데 조합형/완성형 차이여도 같은 해시가 나와야 한다."""
+    composed = "가"                       # NFC 완성형
+    decomposed = "\u1100\u1161"           # NFD 자모 분리 (ㄱ + ㅏ)
+    assert make_content_hash(composed) == make_content_hash(decomposed)
+def test_hash_differs_for_different_content():
+    """내용 자체가 다르면 해시도 달라야 한다."""
+    assert make_content_hash("서울") != make_content_hash("부산")
+
+def test_r02_blocks_empty_source_id():
+    """R02: source_id가 비어 있으면 실패."""
+    doc = LegalDocument(
+        source_id="",                 # 결측
+        jurisdiction="KR",
+        source_type="minutes",
+        language="ko",
+        title="제목 있음",
+        issued_date=date(2024, 1, 1),
+        source_url="https://example.com",
+        content_hash=make_content_hash("내용"),
+    )
+    engine = QARuleEngine()
+    assert engine.validate(doc) is False
+    assert engine.get_summary()["R02"] == 1
+
+
+def test_r02_blocks_empty_content_hash():
+    """R02: content_hash가 비어 있으면 실패."""
+    doc = LegalDocument(
+        source_id="doc1",
+        jurisdiction="KR",
+        source_type="minutes",
+        language="ko",
+        title="제목 있음",
+        issued_date=date(2024, 1, 1),
+        source_url="https://example.com",
+        content_hash="",              # 결측
+    )
+    engine = QARuleEngine()
+    assert engine.validate(doc) is False
+    assert engine.get_summary()["R02"] == 1

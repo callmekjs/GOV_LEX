@@ -6,6 +6,8 @@ from datetime import datetime, date
 from typing import Any
 from pydantic import BaseModel, Field
 import hashlib
+import re
+import unicodedata
 
 
 class LegalDocument(BaseModel):
@@ -78,6 +80,14 @@ class LegalDocument(BaseModel):
     )
 
 
+def _normalize_text(text: str) -> str:
+    """해시 계산 전, 텍스트를 표준 형태로 청소합니다."""
+    text = unicodedata.normalize("NFC", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 def make_content_hash(text: str) -> str:
-    """본문 텍스트로 SHA-256 해시를 만듭니다."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    """본문 텍스트를 정규화한 뒤 SHA-256 해시를 만듭니다."""
+    normalized = _normalize_text(text)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
