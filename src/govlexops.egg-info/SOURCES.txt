@@ -1,0 +1,13 @@
+pyproject.toml
+src/govlexops/__init__.py
+src/govlexops.egg-info/PKG-INFO
+src/govlexops.egg-info/SOURCES.txt
+src/govlexops.egg-info/dependency_links.txt
+src/govlexops.egg-info/top_level.txt
+src/govlexops/core/__init__.py
+src/govlexops/etl/__init__.py
+src/govlexops/etl/ingest/__init__.py
+src/govlexops/etl/normalize/__init__.py
+src/govlexops/qa/__init__.py
+src/govlexops/schemas/__init__.py
+src/govlexops/search/__init__.py
