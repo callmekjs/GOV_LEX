@@ -5,6 +5,7 @@ QA Rule Engine.
 from dataclasses import dataclass, field
 from datetime import datetime
 from govlexops.schemas.legal_document import LegalDocument
+from govlexops.core.seen_store import is_seen, mark_seen  
 
 
 @dataclass
@@ -44,9 +45,10 @@ class QARuleEngine:
       R05 - 같은 제목인데 날짜만 다름 → 경고
     """
 
-    def __init__(self):
+    def __init__(self, use_persistent_store: bool = True):
         self.failures: list[QualityFailure] = []
-        self._seen_hashes: set[str] = set()
+        self._use_persistent = use_persistent_store
+        self._seen_this_run: set[str] = set()  # content_hash
         self._seen_titles: dict[str, str] = {}  # title → first issued_date
         self._failure_count = 0
 
@@ -55,18 +57,36 @@ class QARuleEngine:
         return f"F{self._failure_count:04d}"
 
     def check_r01_duplicate(self, doc: LegalDocument) -> bool:
-        """R01: 같은 content_hash가 이미 있으면 중복."""
-        if doc.content_hash in self._seen_hashes:
+        """R01: 영구 저장소 + 이번 실행 중 중복 모두 체크."""
+
+        # 1. 이번 실행 중 중복 체크
+        if doc.content_hash in self._seen_this_run:
             self.failures.append(QualityFailure(
                 failure_id=self._make_failure_id(),
                 rule_id="R01",
                 severity="error",
                 source_id=doc.source_id,
-                observed=f"content_hash 충돌: {doc.content_hash[:16]}...",
-                suggested_fix="이미 적재된 문서와 동일. 신규 문서 거부.",
+                observed=f"이번 실행 중 중복: {doc.content_hash[:16]}...",
+                suggested_fix="동일 실행 내 중복 문서. 거부.",
             ))
             return False
-        self._seen_hashes.add(doc.content_hash)
+
+        # 2. 영구 저장소 중복 체크
+        if self._use_persistent and is_seen(doc.content_hash):
+            self.failures.append(QualityFailure(
+                failure_id=self._make_failure_id(),
+                rule_id="R01",
+                severity="error",
+                source_id=doc.source_id,
+                observed=f"이전 실행에서 이미 수집된 문서: {doc.content_hash[:16]}...",
+                suggested_fix="이전 실행에서 이미 적재됨. 거부.",
+            ))
+            return False
+
+        # 3. 통과 → 기억에 추가
+        self._seen_this_run.add(doc.content_hash)
+        if self._use_persistent:
+            mark_seen(doc.content_hash, doc.source_id, doc.jurisdiction)
         return True
 
     def check_r02_missing_fields(self, doc: LegalDocument) -> bool:

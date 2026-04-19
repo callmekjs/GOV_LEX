@@ -53,6 +53,39 @@ def fetch_laws(query: str = "인공지능", max_count: int = 10) -> list[LegalDo
     print(f"  ✅ 한국 법령 {len(docs)}건 변환 완료")
     return docs
 
+def fetch_laws_bulk(
+    queries: list[str] = None,
+    max_per_query: int = 10,
+) -> list[LegalDocument]:
+    """
+    여러 쿼리로 법령을 수집하고 중복을 제거해서 반환합니다.
+    """
+    if queries is None:
+        queries = [
+            "인공지능",
+            "데이터",
+            "개인정보",
+            "정보통신",
+            "규제",
+            "디지털",
+        ]
+
+    all_docs = []
+    seen_ids = set()
+
+    for query in queries:
+        try:
+            docs = fetch_laws(query=query, max_count=max_per_query)
+            for doc in docs:
+                if doc.source_id not in seen_ids:
+                    seen_ids.add(doc.source_id)
+                    all_docs.append(doc)
+        except Exception as e:
+            print(f"  ⚠️ 쿼리 실패 ({query}): {e}")
+
+    print(f"  ✅ KR 법령 총 {len(all_docs)}건 (중복 제거 후)")
+    return all_docs
+
 
 def _convert_to_document(law: dict) -> LegalDocument:
     """법령 API 응답 1건을 LegalDocument로 변환합니다."""
