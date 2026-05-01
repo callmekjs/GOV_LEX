@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+runs
+data_index/raw
+data_index/quality
+data_index/normalized/docs.jsonl
+data_index/normalized/seen_hashes.jsonl
+.pytest_cache
+.coverage
+tests
+*.md
+!docs/dashboard.md

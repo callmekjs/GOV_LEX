@@ -1,0 +1,31 @@
+store_backend: jsonl
+sqlite_path: data_index/normalized/docs.sqlite
+
+kr_law:
+  queries:
+    - 인공지능
+    - 데이터
+    - 개인정보
+  max_per_query: 10
+  issued_since_year_offset: -2
+
+kr_decree:
+  queries:
+    - 시행령
+    - 대통령령
+  max_per_query: 10
+  issued_since_year_offset: -2
+  target: ordin
+
+us_congress:
+  congress: 118
+  max_count: 20
+  min_intro_year_offset: -2
+
+kr_assembly:
+  assemblies:
+    - 제22대
+  test_limit: 100
+  page_size: 50
+  start_year_offset: -2
+  end_year_offset: -1

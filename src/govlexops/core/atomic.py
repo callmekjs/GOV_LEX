@@ -20,6 +20,7 @@
   파일이 커질수록 O(file_size). 포트폴리오 규모(수만 줄)에선 문제없음.
   대규모(GB+)로 가면 SQLite/RDB로 이전 (Phase 2-6 어댑터 패턴 참조).
 """
+
 from __future__ import annotations
 
 import os
@@ -46,10 +47,7 @@ def atomic_append_jsonl(target: Path, lines: Iterable[str]) -> int:
         파이프라인은 단일 run을 가정하므로 PID 기반 staging 이름으로
         같은 머신 내 우발적 충돌만 회피한다.
     """
-    materialized = [
-        line if line.endswith("\n") else line + "\n"
-        for line in lines
-    ]
+    materialized = [line if line.endswith("\n") else line + "\n" for line in lines]
     if not materialized:
         return 0
 

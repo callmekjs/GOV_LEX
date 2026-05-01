@@ -39,8 +39,8 @@
 | Phase | 기간 | 점수 | 상태 |
 |-------|------|------|------|
 | **Phase 0** — 결함 복구 | 1주 | 5.8 → **7.0** | ✅ 완료 (2026-04-30) |
-| Phase 1 — 운영 인프라 | 1주 | 7.0 → 7.5 | 진행 중 (1-1 완료) |
-| Phase 2 — 운영 패턴 이식 (Helixops 선별) | 2주 | 7.5 → 8.5 | 진행 예정 |
+| Phase 1 — 운영 인프라 | 1주 | 7.0 → 7.5 | ✅ 완료 (2026-05-01) |
+| Phase 2 — 운영 패턴 이식 (Helixops 선별) | 2주 | 7.5 → 8.5 | ✅ 완료 (2026-05-01) |
 | Phase 3 — 차별화 마무리 | 1주 | 8.5 → 9.0+ | 진행 예정 |
 | **Phase 4** — 챗봇 프로젝트 | 2~3주 | → 9.5+ | 진행 예정 (Phase 3 후) |
 | 폴리싱·면접 준비 | 1주 | 9.5+ | 진행 예정 |
@@ -228,7 +228,7 @@ JD 본문 인용:
 | 영역 | 시작 (5.8) | 현재 (7.0) | 목표 (9.0+) |
 |---|---|---|---|
 | 데이터 무결성 | R01 버그·content_hash 정의 불일치 | ✅ 둘 다 해결 | 버그 0, 정의 일치 |
-| 테스트 | 19개 (수집기 0) | **83개** (+ 수집기 `responses` mock) | 70%+ 커버리지, 수집기 mock 테스트 |
+| 테스트 | 19개 (수집기 0) | **87개** (+ 설정 외부화 테스트) | 70%+ 커버리지, 수집기 mock 테스트 |
 | 운영 흔적 | print 문, run 폴더만 | ✅ logging + run별 pipeline.log | logging + metrics.json + dashboard.md |
 | 데이터 안전성 | open(append) 직접 쓰기 | ✅ atomic write | atomic write + Adapter |
 | HTTP 안정성 | 수집기별 제각각 | ✅ 통일 클라이언트 | (변동 없음) |
@@ -1299,24 +1299,24 @@ UI는 단순하게 — 기능에 집중. Streamlit이면 충분.
 ## Phase 1 — 운영 인프라 (목표 7.5)
 - [x] 1-1. 수집기 mock 테스트 + coverage 70% ✅ 2026-05-01
 - [x] 1-2. GitHub Actions CI ✅ 2026-05-01
-- [ ] 1-3. metrics.json + dashboard.md
-- [ ] 1-4. configs/pipeline.yaml 외부화
-- [ ] 1-5. ruff + pre-commit
+- [x] 1-3. metrics.json + dashboard.md ✅ 2026-05-01
+- [x] 1-4. configs/pipeline.yaml 외부화 ✅ 2026-05-01
+- [x] 1-5. ruff + pre-commit ✅ 2026-05-01
 
 ## Phase 2 — 운영 패턴 이식 (목표 8.5)
-- [ ] 2-1. scripts/ + Docker
-- [ ] 2-2. Replay 모드 (`replay --run-path`)
-- [ ] 2-3. ETL 5단계 디렉터리
-- [ ] 2-4. **법률 도메인 온톨로지 정리** (← State+Delta 대체, Helixops `ontology/` 차용)
-- [ ] 2-5. **Failure Catalog** (← Failure Knowledge 축소, Reflexion 빼고 카탈로그만)
-- [ ] 2-6. Adapter 패턴 (integrations/store/)
+- [x] 2-1. scripts/ + Docker ✅ 2026-05-01
+- [x] 2-2. Replay 모드 (`replay --run-path`) ✅ 2026-05-01
+- [x] 2-3. ETL 5단계 디렉터리 ✅ 2026-05-01
+- [x] 2-4. **법률 도메인 온톨로지 정리** (← State+Delta 대체, Helixops `ontology/` 차용) ✅ 2026-05-01 (draft)
+- [x] 2-5. **Failure Catalog** (← Failure Knowledge 축소, Reflexion 빼고 카탈로그만) ✅ 2026-05-01
+- [x] 2-6. Adapter 패턴 (integrations/store/) ✅ 2026-05-01
 
 ## Phase 3 — 차별화 (목표 9.0+)
-- [ ] 3-1. ADR 7개 작성
+- [x] 3-1. ADR 7개 작성 ✅ 2026-05-01
 - [ ] 3-2. decree 또는 minutes 1종 추가
-- [ ] 3-3. entities/relations 추출
-- [ ] 3-4. (옵션) pgvector 하이브리드 검색
-- [ ] 3-5. CODIT 매핑표 + scoring_mapping.md
+- [x] 3-3. entities/relations 추출 ✅ 2026-05-01
+- [x] 3-4. (옵션) 하이브리드 검색(BM25+벡터) ✅ 2026-05-01
+- [x] 3-5. CODIT 매핑표 + scoring_mapping.md ✅ 2026-05-01
 
 ## Phase 4 — LLM 챗봇 (목표 9.5+)
 - [ ] 4-1. 챗봇 프로젝트 부트스트랩
@@ -1373,6 +1373,19 @@ UI는 단순하게 — 기능에 집중. Streamlit이면 충분.
 | 2026-04-30 | 0-6. docs.jsonl 원자적 쓰기 | **7.0** | **Phase 0 완료.** core/atomic.py 신설(staging→os.replace 패턴, PID suffix로 충돌회피). storage.save_documents·seen_store.mark_seen 모두 atomic 전환. 배치 API mark_seen_many 추가로 commit_seen_for_passed 비용 1/N. atomic·storage·seen_store 잠금 테스트 22개 추가, mock으로 os.replace 실패 시 target 보존 직접 검증 (총 69개 PASS) |
 | 2026-05-01 | 1-1. 수집기 mock 테스트 + coverage 70% | 7.2 | `tests/ingest/` 3파일(14개) 추가. 정상·빈결과·429·비정상 JSON 검증. 전체 83 passed, coverage 약 74%. |
 | 2026-05-01 | 1-2. GitHub Actions CI | **7.5** | `.github/workflows/ci.yml` 추가, ruff+mypy+pytest(coverage gate 70%) 자동 실행. `Readme.md` 상단 CI/Coverage 배지 연결, 로컬 선검증 통과. |
+| 2026-05-01 | 1-3. metrics.json + dashboard.md | **7.5** | `pipeline.py`에 `metrics.json` 자동 기록 추가, `scripts/build_dashboard.py`로 `docs/dashboard.md` 자동 생성. 메트릭/대시보드 잠금 테스트 2건 추가 (총 85 passed). |
+| 2026-05-01 | 1-4. configs/pipeline.yaml 외부화 | **7.5** | `core/config.py`(pydantic+pydantic-settings) 추가, `configs/pipeline.yaml`/`dev.yaml`/`prod.yaml` 작성. `pipeline.py --config`로 정책 주입, 수집기 파라미터 하드코딩 제거. 설정 로더 테스트 2건 추가 (총 87 passed). |
+| 2026-05-01 | 1-5. ruff + pre-commit | **7.5** | `.pre-commit-config.yaml` 추가(ruff/ruff-format, `src/` 대상). `pre-commit install` 및 `run --all-files`로 코드 포맷 정리 후 `ruff check src/`, `mypy`, `pytest` 재검증 통과 (총 87 passed). |
+| 2026-05-01 | 2-1. scripts/ + Docker | **7.8** | `docker/Dockerfile`, `docker/docker-compose.yml`, `.dockerignore` 추가. `scripts/`에 build/run/smoke/replay 셸 스크립트 구성. `docker compose config` 및 `docker build -f docker/Dockerfile .` 검증 통과. |
+| 2026-05-01 | 2-2. Replay 모드 (`replay --run-path`) | **8.0** | `core/replay.py` + `services/cli.py`로 replay 구현. `python -m govlexops.services.cli replay --run-path ... --only-failures --regenerate-report` 지원, `replay_report.md` 생성. replay 테스트 3건 추가 (총 90 passed). |
+| 2026-05-01 | 2-3. ETL 5단계 디렉터리 | **8.1** | `core/raw_store.py` 추가로 원본 응답 gzip 보관(`data_index/raw`). 파이프라인이 `raw/normalized/extracted/chunks/embeddings/quality` 자동 생성. 수집기 3종 raw 저장 연결, raw_store 테스트 2건 추가 (총 92 passed). |
+| 2026-05-01 | 2-4. 법률 도메인 온톨로지 정리 (draft) | **8.2** | `docs/ontology/`에 `concepts.md`, `relations.md`, `kr_us_mapping.md` 추가. 개념/관계를 active·pending으로 분리하고 relation별 근거 필드/신뢰도 명시. README에 온톨로지 링크 연결. |
+| 2026-05-01 | 2-5. Failure Catalog | **8.3** | `qa/failure_catalog.py` 추가, `qa/report.py`가 실패 건을 카탈로그에 누적 적재. `scripts/analyze_failures.py`로 `docs/failure_patterns.md` 자동 생성. failure_catalog 테스트 2건 추가 후 총 94 passed. |
+| 2026-05-01 | 2-6. Adapter 패턴 | **8.5** | `integrations/store/base.py` 인터페이스와 `jsonl_store.py`/`sqlite_store.py` 구현, `factory.py` 추가. `configs/*.yaml`에 `store_backend`, `sqlite_path` 도입 후 파이프라인이 백엔드 선택 주입. adapter 테스트 2건 추가, 총 96 passed. |
+| 2026-05-01 | 3-1. ADR 7개 작성 | **8.7** | `docs/adr/ADR-001.md`~`ADR-007.md` 작성. 의사결정 7건을 Context/Decision/Consequences/Alternatives 형식으로 고정해 "왜 이렇게 설계했는가"를 문서 증거로 정리. `Readme.md`에 `docs/adr/` 링크 추가. |
+| 2026-05-01 | 3-3. entities/relations 추출 | **8.9** | `src/govlexops/etl/extract.py` 신설. KR 국회 법안(`kr_assembly_*`)의 `ppsr_nm`, `jrcmit_nm`에서 `Member/Committee` 엔티티와 `PROPOSED_BY/REVIEWED_BY` 관계 추출. 파이프라인이 `data_index/extracted/entities.jsonl`, `relations.jsonl`을 자동 생성/누적. 추출 테스트 3건 추가. |
+| 2026-05-01 | 3-4. 하이브리드 검색(BM25+벡터) | **9.0** | `src/govlexops/search/indexer.py`를 BM25+해시 벡터 코사인 하이브리드로 확장. `AI↔인공지능`, `privacy↔개인정보` 동의어 확장 추가. `app.py`에 검색 모드(하이브리드/BM25) 토글 추가. 검색 회귀 테스트 2건(`tests/test_search_hybrid.py`) 추가. |
+| 2026-05-01 | 3-5. CODIT 매핑표 + scoring_mapping | **9.1** | `Readme.md` §18을 `요구사항/증명/코드 링크` 3열 표로 업그레이드. `docs/scoring_mapping.md` 신설해 JD 항목별 증거 경로를 상세 매핑하고 면접용 30초 답변 템플릿 추가. |
 | | | | |
 
 ---
@@ -1401,6 +1414,19 @@ UI는 단순하게 — 기능에 집중. Streamlit이면 충분.
 ### Phase 1~4 (진행 후 작성)
 - **1-1**: "`responses`로 KR/US/국회 수집기 HTTP 스텁. 정상·빈 목록·429·비정상 JSON을 각 소스에 맞게 검증(`tests/ingest/`). 국회는 상위 루프가 예외를 삼키는 구간은 `request_json` 단위로 분리 검증. `pytest --cov=govlexops` 약 74%."
 - **1-2**: "`.github/workflows/ci.yml` 신설. push/PR마다 `ruff check src/` + `mypy src/govlexops --ignore-missing-imports` + `pytest tests/ --cov=govlexops --cov-fail-under=70` 자동 실행. `Readme.md` 상단에 CI/Coverage 배지 연결."
+- **1-3**: "`pipeline.py`에 run 메트릭 기록(`runs/<run_id>/metrics.json`) 추가. `scripts/build_dashboard.py`로 누적 run 집계 후 `docs/dashboard.md` 자동 생성. `tests/test_metrics_dashboard.py` 2건으로 metrics/dashboard 동작 잠금."
+- **1-4**: "`src/govlexops/core/config.py`에 pydantic 설정 로더 추가 + `configs/pipeline.yaml`, `configs/dev.yaml`, `configs/prod.yaml` 분기. 파이프라인은 `--config` 인자로 정책 로드해 수집기 파라미터(쿼리/건수/연도오프셋/국회 옵션)를 주입."
+- **1-5**: "`.pre-commit-config.yaml`에 ruff/ruff-format 훅 도입(대상: `src/`). `pre-commit install`로 커밋 훅 설치, `pre-commit run --all-files`로 포맷 일괄 정리. 이후 `ruff check src/` + `mypy` + `pytest` 재검증 통과."
+- **2-1**: "`docker/Dockerfile`, `docker/docker-compose.yml` 추가로 컨테이너 재현 실행 경로 확보. `scripts/build_docker.sh`, `run_pipeline.sh`, `smoke_test.sh`, `replay_run.sh` 풀세트 구성. `docker build`와 `docker compose config` 검증 통과."
+- **2-2**: "`src/govlexops/services/cli.py`(Typer)로 `run`/`replay` 커맨드 추가. `src/govlexops/core/replay.py`에서 run 경로 기준 재검증(`--only-failures`, `--regenerate-report`) 구현 후 `replay_report.md` 생성. replay 테스트 3건 포함 전체 90 passed."
+- **2-3**: "`core/raw_store.py`로 API 원본 응답 gzip 보관(`data_index/raw/<source>/<date>/...`) 추가. 파이프라인 시작 시 `raw/normalized/extracted/chunks/embeddings/quality` 6개 디렉터리 자동 생성. 수집기 3종에 raw 저장 플래그 주입 후 전체 92 passed."
+- **2-4**: "`docs/ontology/concepts.md`, `relations.md`, `kr_us_mapping.md`로 온톨로지 초안 작성. active/pending 구분, relation별 근거 필드와 confidence를 명시해 Phase 3-3의 entities/relations 추출 기준을 고정."
+- **2-5**: "`qa/failure_catalog.py`로 실패 카탈로그(`data_index/quality/failure_catalog.jsonl`) 누적 기록. `scripts/analyze_failures.py`로 rule/source_type/jurisdiction 패턴을 `docs/failure_patterns.md` 생성. 파이프라인 시작 시 카탈로그 요약 로그 출력."
+- **2-6**: "`integrations/store/`에 `DocumentStore` 인터페이스 + `jsonl_store.py`/`sqlite_store.py` 추가. `create_document_store()` 팩토리로 `store_backend`를 주입해 같은 파이프라인 코드로 JSONL/SQLite 전환 가능. 어댑터 테스트 2건 추가 후 전체 96 passed."
+- **3-1**: "`docs/adr/ADR-001~007` 작성으로 JSONL 선택, content_hash 정의, metadata 승격 정책, QA 분리, run_id 격리, config 외부화, 검색 마이그레이션 트리거를 의사결정 문서로 고정. README에 Architecture Decisions 링크를 연결."
+- **3-3**: "`src/govlexops/etl/extract.py`를 추가해 국회 법안 metadata(`ppsr_nm`, `jrcmit_nm`)에서 엔티티/관계를 추출하고 `data_index/extracted/entities.jsonl`, `relations.jsonl`로 누적 저장. 파이프라인에 `extract_done` 이벤트를 연결해 run 단위 관측이 가능해졌습니다."
+- **3-4**: "`search/indexer.py`에 BM25+벡터 하이브리드 점수 결합(0.6/0.4)과 KR/EN 동의어 확장을 적용. `app.py`에서 모드 토글로 비교 검색이 가능해졌고, 'AI' 질의가 '인공지능' 문서를 찾는 회귀 테스트를 추가."
+- **3-5**: "`Readme.md` §18을 '증거 링크' 중심 매핑표로 개편하고 `docs/scoring_mapping.md`를 신설해 CODIT JD 항목별 코드/문서 경로를 고정. 면접에서 '어디 코드냐' 질문에 5초 내 답할 수 있는 링크형 증거 맵을 완성."
 - ...
 
 ## 14-3. 화면 공유용 자산
@@ -1433,4 +1459,27 @@ UI는 단순하게 — 기능에 집중. Streamlit이면 충분.
 ---
 
 *마스터 플랜 — 마지막 갱신: 2026-05-01*
-*다음 단계: Phase 1-3 metrics.json + dashboard.md 자동 생성.*
+*다음 단계: Phase 3 종료 점검 (3-2 실데이터 수집 재시도) 후 Phase 4-1.*
+
+---
+
+<!-- AUTO_PHASE_SYNC:START -->
+### 자동 동기화 상태
+- 마지막 완료 페이즈: **3-5**
+- 다음 권장 페이즈: **3-6**
+- 동기화 시각: 2026-05-01 21:58
+
+#### 최근 완료 페이즈 (최신순)
+| Phase | 요약 |
+|---|---|
+| 3-5 | `Readme.md` §18을 '증거 링크' 중심 매핑표로 개편하고 `docs/scoring_mapping.md`를 신설해 CODIT JD 항목별 코드/문서 경로를 고정. 면접에서 '어디 코드냐' 질문에 5초 내 답할 수 있는 링크형 증거 맵을 완성. |
+| 3-4 | `search/indexer.py`에 BM25+벡터 하이브리드 점수 결합(0.6/0.4)과 KR/EN 동의어 확장을 적용. `app.py`에서 모드 토글로 비교 검색이 가능해졌고, 'AI' 질의가 '인공지능' 문서를 찾는 회귀 테스트를 추가. |
+| 3-3 | `src/govlexops/etl/extract.py`를 추가해 국회 법안 metadata(`ppsr_nm`, `jrcmit_nm`)에서 엔티티/관계를 추출하고 `data_index/extracted/entities.jsonl`, `relations.jsonl`로 누적 저장. 파이프라인에 `extract_done` 이벤트를 연결해 run 단위 관측이 가능해졌습니다. |
+| 3-1 | `docs/adr/ADR-001~007` 작성으로 JSONL 선택, content_hash 정의, metadata 승격 정책, QA 분리, run_id 격리, config 외부화, 검색 마이그레이션 트리거를 의사결정 문서로 고정. README에 Architecture Decisions 링크를 연결. |
+| 2-6 | `integrations/store/`에 `DocumentStore` 인터페이스 + `jsonl_store.py`/`sqlite_store.py` 추가. `create_document_store()` 팩토리로 `store_backend`를 주입해 같은 파이프라인 코드로 JSONL/SQLite 전환 가능. 어댑터 테스트 2건 추가 후 전체 96 passed. |
+| 2-5 | `qa/failure_catalog.py`로 실패 카탈로그(`data_index/quality/failure_catalog.jsonl`) 누적 기록. `scripts/analyze_failures.py`로 rule/source_type/jurisdiction 패턴을 `docs/failure_patterns.md` 생성. 파이프라인 시작 시 카탈로그 요약 로그 출력. |
+| 2-4 | `docs/ontology/concepts.md`, `relations.md`, `kr_us_mapping.md`로 온톨로지 초안 작성. active/pending 구분, relation별 근거 필드와 confidence를 명시해 Phase 3-3의 entities/relations 추출 기준을 고정. |
+| 2-3 | `core/raw_store.py`로 API 원본 응답 gzip 보관(`data_index/raw/<source>/<date>/...`) 추가. 파이프라인 시작 시 `raw/normalized/extracted/chunks/embeddings/quality` 6개 디렉터리 자동 생성. 수집기 3종에 raw 저장 플래그 주입 후 전체 92 passed. |
+| 2-2 | `src/govlexops/services/cli.py`(Typer)로 `run`/`replay` 커맨드 추가. `src/govlexops/core/replay.py`에서 run 경로 기준 재검증(`--only-failures`, `--regenerate-report`) 구현 후 `replay_report.md` 생성. replay 테스트 3건 포함 전체 90 passed. |
+| 2-1 | `docker/Dockerfile`, `docker/docker-compose.yml` 추가로 컨테이너 재현 실행 경로 확보. `scripts/build_docker.sh`, `run_pipeline.sh`, `smoke_test.sh`, `replay_run.sh` 풀세트 구성. `docker build`와 `docker compose config` 검증 통과. |
+<!-- AUTO_PHASE_SYNC:END -->

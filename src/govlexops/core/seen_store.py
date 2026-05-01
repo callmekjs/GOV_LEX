@@ -4,6 +4,7 @@
   mark_seen / mark_seen_many는 atomic_append_jsonl을 통해 staging → rename
   패턴으로 기록한다. 도중에 죽어도 seen_hashes.jsonl은 이전 상태 유지.
 """
+
 from __future__ import annotations
 
 import json
@@ -91,11 +92,15 @@ def mark_seen(content_hash: str, source_id: str, jurisdiction: str) -> None:
 
     신규 코드는 mark_seen_many를 권장 (배치 atomic write로 비용 1/N).
     """
-    mark_seen_many([{
-        "content_hash": content_hash,
-        "source_id": source_id,
-        "jurisdiction": jurisdiction,
-    }])
+    mark_seen_many(
+        [
+            {
+                "content_hash": content_hash,
+                "source_id": source_id,
+                "jurisdiction": jurisdiction,
+            }
+        ]
+    )
 
 
 def count_seen() -> int:

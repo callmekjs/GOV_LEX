@@ -1,0 +1,67 @@
+store_backend: jsonl
+sqlite_path: data_index/normalized/docs.sqlite
+
+kr_law:
+  queries:
+    - 인공지능
+    - 데이터
+    - 개인정보
+    - 정보통신
+    - 규제
+    - 디지털
+    - 클라우드
+    - 사이버
+    - 네트워크
+    - 전자정부
+    - 플랫폼
+    - 알고리즘
+    - 자동화
+    - 반도체
+    - 소프트웨어
+    - 온라인
+    - 전자문서
+    - 전자서명
+    - 블록체인
+    - 메타버스
+    - 빅데이터
+    - 오픈데이터
+    - 정보보호
+    - 정보유출
+    - 해킹
+    - 스팸
+    - 전기통신
+    - 방송
+    - 저작권
+    - 특허
+    - 표준
+    - 산업안전
+    - 소비자
+    - 금융
+    - 핀테크
+    - 전자상거래
+  max_per_query: 80
+  issued_since_year_offset: -3
+
+kr_decree:
+  queries:
+    - 시행령
+    - 대통령령
+    - 총리령
+    - 부령
+  max_per_query: 80
+  issued_since_year_offset: -3
+  target: ordin
+
+us_congress:
+  congress: 118
+  max_count: 250
+  min_intro_year_offset: -3
+
+kr_assembly:
+  assemblies:
+    - 제21대
+    - 제22대
+  test_limit: 5000
+  page_size: 100
+  start_year_offset: -3
+  end_year_offset: -1

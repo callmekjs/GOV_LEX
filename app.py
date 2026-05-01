@@ -47,6 +47,12 @@ with col_filter:
         label_visibility="collapsed",
     )
 
+mode = st.radio(
+    "검색 모드",
+    ["하이브리드", "BM25"],
+    horizontal=True,
+)
+
 # ── 예시 검색어 버튼 ──
 st.write("예시:")
 ex_col1, ex_col2, ex_col3, ex_col4 = st.columns(4)
@@ -61,7 +67,12 @@ if ex_col4.button("privacy"):
 
 # ── 검색 실행 ──
 if query:
-    results = search(query=query, top_k=10, jurisdiction=jurisdiction)
+    results = search(
+        query=query,
+        top_k=10,
+        jurisdiction=jurisdiction,
+        mode="hybrid" if mode == "하이브리드" else "bm25",
+    )
 
     if results:
         st.success(f"**{len(results)}건** 검색됨")

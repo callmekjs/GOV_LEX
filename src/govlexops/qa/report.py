@@ -2,9 +2,11 @@
 품질 리포트를 자동 생성하는 모듈.
 실행할 때마다 runs/<run_id>/quality_report.md 파일이 만들어집니다.
 """
+
 import json
 from pathlib import Path
 from datetime import datetime
+from govlexops.qa.failure_catalog import append_to_catalog
 from govlexops.qa.rules import QARuleEngine
 
 
@@ -67,6 +69,7 @@ def generate_quality_report(
     with open(failures_path, "w", encoding="utf-8") as fp:
         for failure in failures:
             fp.write(json.dumps(failure, ensure_ascii=False) + "\n")
+            append_to_catalog(failure)
 
     # ── 전역 누적 실패 파일 (운영 대시보드용) ──
     _append_to_global_failure_log(run_dir=run_dir, failures=failures)

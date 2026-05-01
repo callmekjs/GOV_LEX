@@ -1,0 +1,44 @@
+services:
+  pipeline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: govlexops:latest
+    env_file:
+      - ../.env
+    environment:
+      PYTHONPATH: /app/src
+    command: ["--config", "configs/pipeline.yaml"]
+    volumes:
+      - ../runs:/app/runs
+      - ../data_index:/app/data_index
+    restart: "no"
+
+  pgvector:
+    image: pgvector/pgvector:pg16
+    profiles: ["db"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: govlex
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5-community
+    profiles: ["graph"]
+    environment:
+      NEO4J_AUTH: neo4j/password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  neo4j_data:

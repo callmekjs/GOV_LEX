@@ -18,6 +18,7 @@ requests.get()을 호출하던 것을 하나의 함수로 통일한다.
   - User-Agent 헤더 통일
   - 구조화 로그 (logging.getLogger("govlex.http"))
 """
+
 from __future__ import annotations
 
 import logging
@@ -85,10 +86,13 @@ def get_json(
             resp = sess.get(url, params=params, timeout=timeout, headers=final_headers)
         except (requests.Timeout, requests.ConnectionError) as e:
             last_exc = e
-            wait = backoff ** attempt
+            wait = backoff**attempt
             log.warning(
                 "http_network_retry attempt=%d url=%s err=%s wait=%.2fs",
-                attempt, url, type(e).__name__, wait,
+                attempt,
+                url,
+                type(e).__name__,
+                wait,
             )
             if attempt < max_retries:
                 time.sleep(wait)
@@ -97,10 +101,12 @@ def get_json(
 
         # 429 → 대기 후 재시도
         if resp.status_code == 429:
-            wait = (backoff ** attempt) * 2
+            wait = (backoff**attempt) * 2
             log.warning(
                 "http_rate_limited attempt=%d url=%s wait=%.2fs",
-                attempt, url, wait,
+                attempt,
+                url,
+                wait,
             )
             if attempt < max_retries:
                 time.sleep(wait)
@@ -109,10 +115,13 @@ def get_json(
 
         # 5xx → 대기 후 재시도
         if 500 <= resp.status_code < 600:
-            wait = backoff ** attempt
+            wait = backoff**attempt
             log.warning(
                 "http_server_error_retry attempt=%d status=%d url=%s wait=%.2fs",
-                attempt, resp.status_code, url, wait,
+                attempt,
+                resp.status_code,
+                url,
+                wait,
             )
             if attempt < max_retries:
                 time.sleep(wait)
@@ -131,9 +140,7 @@ def get_json(
         except ValueError as e:
             raise HTTPError(f"Invalid JSON response from {url}: {e}") from e
 
-    raise HTTPError(
-        f"Network failure after {max_retries} retries: {url}"
-    ) from last_exc
+    raise HTTPError(f"Network failure after {max_retries} retries: {url}") from last_exc
 
 
 def make_session() -> Session:

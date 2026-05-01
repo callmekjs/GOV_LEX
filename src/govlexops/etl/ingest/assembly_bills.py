@@ -2,6 +2,7 @@
 열린국회정보 Open API — 국회 법률안을 LegalDocument로 수집합니다.
 메인 파이프라인에서 `fetch_assembly_bills()`를 호출합니다.
 """
+
 import json
 import logging
 import os
@@ -13,15 +14,14 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 from govlexops.core.http import get_json, make_session
+from govlexops.core.raw_store import save_raw_response
 from govlexops.schemas.legal_document import LegalDocument, make_content_hash
 
 load_dotenv()
 log = logging.getLogger(__name__)
 
 API_KEY = (
-    os.getenv("OPEN_ASSEMBLY_API_KEY")
-    or os.getenv("OPEN_ASSAMBLY_API_KEY")
-    or ""
+    os.getenv("OPEN_ASSEMBLY_API_KEY") or os.getenv("OPEN_ASSAMBLY_API_KEY") or ""
 ).strip()
 
 # 최근 3개 연도(완료 연도 기준): 예) 2026년 실행 → 2023-01-01 ~ 2025-12-31
@@ -111,7 +111,13 @@ def date_in_range(text: str, start_date: str, end_date: str) -> bool:
     return start_date <= norm <= end_date
 
 
-def request_json(service_name: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+def request_json(
+    service_name: str,
+    params: Dict[str, Any],
+    max_retries: int = 3,
+    save_raw: bool = False,
+    raw_key: str = "",
+) -> Dict[str, Any]:
     """[pipline_upgrade 0-3] 공통 HTTP 클라이언트의 얇은 래퍼.
 
     - timeout, retry, 429/5xx 처리, UA 헤더는 모두 govlexops.core.http.get_json이 담당.
@@ -119,13 +125,17 @@ def request_json(service_name: str, params: Dict[str, Any], max_retries: int = 3
     - 호출자 측의 time.sleep(REQUEST_SLEEP)는 그대로 유지(쿼터 친화적 페이싱).
     """
     url = BASE_URL + service_name
-    return get_json(
+    payload = get_json(
         url,
         params=params,
         timeout=TIMEOUT,
         max_retries=max_retries,
         session=session,
     )
+    if save_raw:
+        suffix = raw_key or service_name
+        save_raw_response(payload, source="kr_assembly", key=f"{service_name}_{suffix}")
+    return payload
 
 
 def collect_dicts_with_keys(obj: Any, required_keys: set) -> List[Dict[str, Any]]:
@@ -151,7 +161,12 @@ def collect_dicts_with_keys(obj: Any, required_keys: set) -> List[Dict[str, Any]
     return list(uniq.values())
 
 
-def fetch_bill_list_for_year(eraco: str, year: int) -> List[Dict[str, Any]]:
+def fetch_bill_list_for_year(
+    eraco: str,
+    year: int,
+    page_size: int = PAGE_SIZE,
+    save_raw: bool = False,
+) -> List[Dict[str, Any]]:
     all_rows = []
     seen_bill_nos = set()
     page = 1
@@ -161,17 +176,23 @@ def fetch_bill_list_for_year(eraco: str, year: int) -> List[Dict[str, Any]]:
             "KEY": API_KEY,
             "Type": "json",
             "pIndex": page,
-            "pSize": PAGE_SIZE,
+            "pSize": page_size,
             "ERACO": eraco,
             "BILL_KND": "법률안",
             "PPSL_DT": str(year),
         }
 
-        data = request_json("ALLBILLV2", params)
+        data = request_json(
+            "ALLBILLV2",
+            params,
+            save_raw=save_raw,
+            raw_key=f"{eraco}_{year}_p{page}",
+        )
         rows = collect_dicts_with_keys(data, {"BILL_NO", "BILL_NM", "PPSL_DT"})
 
         rows = [
-            r for r in rows
+            r
+            for r in rows
             if "법률안" in str(r.get("BILL_KND", ""))
             and str(year) in str(r.get("PPSL_DT", ""))
         ]
@@ -189,7 +210,10 @@ def fetch_bill_list_for_year(eraco: str, year: int) -> List[Dict[str, Any]]:
         all_rows.extend(new_rows)
         log.info(
             "[bill_list] %s %d page=%d count=%d",
-            eraco, year, page, len(new_rows),
+            eraco,
+            year,
+            page,
+            len(new_rows),
         )
         page += 1
         time.sleep(REQUEST_SLEEP)
@@ -197,7 +221,9 @@ def fetch_bill_list_for_year(eraco: str, year: int) -> List[Dict[str, Any]]:
     return all_rows
 
 
-def fetch_bill_summary(bill_no: str) -> Optional[Dict[str, Any]]:
+def fetch_bill_summary(
+    bill_no: str, save_raw: bool = False
+) -> Optional[Dict[str, Any]]:
     params = {
         "KEY": API_KEY,
         "Type": "json",
@@ -206,7 +232,12 @@ def fetch_bill_summary(bill_no: str) -> Optional[Dict[str, Any]]:
         "BILL_NO": bill_no,
     }
 
-    data = request_json("BPMBILLSUMMARY", params)
+    data = request_json(
+        "BPMBILLSUMMARY",
+        params,
+        save_raw=save_raw,
+        raw_key=f"bill_{bill_no}",
+    )
     rows = collect_dicts_with_keys(data, {"BILL_NO", "SUMMARY"})
 
     if not rows:
@@ -279,6 +310,11 @@ def _bill_to_legal_document(
 
 def fetch_assembly_bills(
     test_limit: Optional[int] = None,
+    assemblies: Optional[List[str]] = None,
+    page_size: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    save_raw: bool = False,
 ) -> List[LegalDocument]:
     """
     설정된 기간·대수의 국회 법률안을 API로 수집해 LegalDocument 목록으로 반환합니다.
@@ -288,26 +324,39 @@ def fetch_assembly_bills(
         raise ValueError(".env에 OPEN_ASSEMBLY_API_KEY를 설정해 주세요.")
 
     limit = test_limit if test_limit is not None else TEST_LIMIT
+    active_assemblies = assemblies if assemblies is not None else ASSEMBLIES
+    active_page_size = page_size if page_size is not None else PAGE_SIZE
+    active_start_date = start_date if start_date is not None else START_DATE
+    active_end_date = end_date if end_date is not None else END_DATE
 
-    start_year = int(START_DATE[:4])
-    end_year = int(END_DATE[:4])
+    start_year = int(active_start_date[:4])
+    end_year = int(active_end_date[:4])
 
     bill_rows: List[Dict[str, Any]] = []
-    for eraco in ASSEMBLIES:
+    for eraco in active_assemblies:
         for year in range(start_year, end_year + 1):
             try:
-                rows = fetch_bill_list_for_year(eraco, year)
+                rows = fetch_bill_list_for_year(
+                    eraco,
+                    year,
+                    page_size=active_page_size,
+                    save_raw=save_raw,
+                )
                 bill_rows.extend(rows)
             except Exception as e:
                 log.warning("[bill_list_err] %s %d err=%s", eraco, year, e)
 
     bill_rows = dedupe_bills(bill_rows)
     bill_rows = [
-        r for r in bill_rows
-        if date_in_range(str(r.get("PPSL_DT", "")), START_DATE, END_DATE)
+        r
+        for r in bill_rows
+        if date_in_range(str(r.get("PPSL_DT", "")), active_start_date, active_end_date)
     ]
     bill_rows.sort(
-        key=lambda x: (normalize_date(str(x.get("PPSL_DT", ""))) or "", str(x.get("BILL_NO", "")))
+        key=lambda x: (
+            normalize_date(str(x.get("PPSL_DT", ""))) or "",
+            str(x.get("BILL_NO", "")),
+        )
     )
 
     log.info("[bill_list_done] 최종 법률안 수: %d건", len(bill_rows))
@@ -316,7 +365,8 @@ def fetch_assembly_bills(
         bill_rows = bill_rows[:limit]
         log.info(
             "[summary_limit] 앞에서 %d건만 처리 (TEST_LIMIT=%s)",
-            len(bill_rows), limit,
+            len(bill_rows),
+            limit,
         )
 
     docs: List[LegalDocument] = []
@@ -326,7 +376,7 @@ def fetch_assembly_bills(
         bill_nm = str(bill.get("BILL_NM", "")).strip()
 
         try:
-            summary_row = fetch_bill_summary(bill_no)
+            summary_row = fetch_bill_summary(bill_no, save_raw=save_raw)
             doc = _bill_to_legal_document(bill, summary_row)
             if doc:
                 docs.append(doc)
@@ -334,7 +384,11 @@ def fetch_assembly_bills(
         except Exception as e:
             log.warning(
                 "[%d/%d] skip bill_no=%s title=%s err=%s",
-                i, total, bill_no, bill_nm[:40], e,
+                i,
+                total,
+                bill_no,
+                bill_nm[:40],
+                e,
             )
 
         time.sleep(REQUEST_SLEEP)

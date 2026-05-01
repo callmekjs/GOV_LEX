@@ -2,6 +2,7 @@
 한국 국가법령정보 Open API 수집기.
 법제처 API에서 법령 데이터를 가져와 LegalDocument로 변환합니다.
 """
+
 import logging
 import os
 from datetime import date
@@ -9,6 +10,7 @@ from datetime import date
 from dotenv import load_dotenv
 
 from govlexops.core.http import get_json
+from govlexops.core.raw_store import save_raw_response
 from govlexops.schemas.legal_document import LegalDocument, make_content_hash
 
 load_dotenv()
@@ -24,15 +26,19 @@ _ISSUED_SINCE_YEAR = date.today().year - 3
 _DATE_PARSE_FAILED_SENTINEL = date(1900, 1, 1)
 
 
-def _issued_in_window(doc: LegalDocument) -> bool:
+def _issued_in_window(doc: LegalDocument, issued_since_year: int) -> bool:
     """연도 정책 필터. 단, 파싱 실패 표지가 있는 문서는 통과시켜
     QA의 R07이 명시적으로 격리하도록 한다 (silently 사라지지 않게)."""
     if doc.metadata.get("date_parse_failed") is True:
         return True
-    return doc.issued_date.year >= _ISSUED_SINCE_YEAR
+    return doc.issued_date.year >= issued_since_year
 
 
-def fetch_laws(query: str = "인공지능", max_count: int = 10) -> list[LegalDocument]:
+def fetch_laws(
+    query: str = "인공지능",
+    max_count: int = 10,
+    save_raw: bool = False,
+) -> list[LegalDocument]:
     """
     법령 검색 API를 호출해서 LegalDocument 목록을 반환합니다.
     """
@@ -52,6 +58,8 @@ def fetch_laws(query: str = "인공지능", max_count: int = 10) -> list[LegalDo
     # [pipline_upgrade 0-3] 공통 HTTP 클라이언트 사용:
     #   timeout 30s + 재시도 3회 + 429/5xx 자동 처리.
     data = get_json(BASE_URL, params=params, timeout=30)
+    if save_raw:
+        save_raw_response(data, source="kr_law", key=f"query_{query}")
 
     # 결과 파싱
     raw_laws = data.get("LawSearch", {}).get("law", [])
@@ -68,15 +76,19 @@ def fetch_laws(query: str = "인공지능", max_count: int = 10) -> list[LegalDo
         except Exception as e:
             log.warning(
                 "⚠️ KR law convert failed: title=%s err=%s",
-                law.get("법령명한글", "?"), e,
+                law.get("법령명한글", "?"),
+                e,
             )
 
     log.info("✅ KR law converted: %d docs (query=%s)", len(docs), query)
     return docs
 
+
 def fetch_laws_bulk(
     queries: list[str] | None = None,
     max_per_query: int = 80,
+    issued_since_year: int | None = None,
+    save_raw: bool = False,
 ) -> list[LegalDocument]:
     """
     여러 쿼리로 법령을 수집하고 중복을 제거해서 반환합니다.
@@ -139,7 +151,7 @@ def fetch_laws_bulk(
 
     for query in queries:
         try:
-            docs = fetch_laws(query=query, max_count=max_per_query)
+            docs = fetch_laws(query=query, max_count=max_per_query, save_raw=save_raw)
             for doc in docs:
                 if doc.source_id not in seen_ids:
                     seen_ids.add(doc.source_id)
@@ -147,11 +159,16 @@ def fetch_laws_bulk(
         except Exception as e:
             log.warning("⚠️ KR law query failed: query=%s err=%s", query, e)
 
+    min_year = (
+        issued_since_year if issued_since_year is not None else _ISSUED_SINCE_YEAR
+    )
     before = len(all_docs)
-    all_docs = [d for d in all_docs if _issued_in_window(d)]
+    all_docs = [d for d in all_docs if _issued_in_window(d, min_year)]
     log.info(
         "✅ KR law year filter (>=%d): %d docs (before filter: %d)",
-        _ISSUED_SINCE_YEAR, len(all_docs), before,
+        min_year,
+        len(all_docs),
+        before,
     )
     return all_docs
 
@@ -190,7 +207,8 @@ def _convert_to_document(law: dict) -> LegalDocument:
     law_serial = law.get("법령일련번호", "")
     source_url = (
         f"https://www.law.go.kr/lsInfoP.do?lsiSeq={law_serial}"
-        if law_serial else "https://www.law.go.kr"
+        if law_serial
+        else "https://www.law.go.kr"
     )
 
     # content_hash: 제목 + 공포일자 기반 (메타데이터 ID 해시; docs/schema_v1.md §6)

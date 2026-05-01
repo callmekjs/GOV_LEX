@@ -1,6 +1,7 @@
 """
 정제된 문서를 data_index/normalized/docs.jsonl에 저장하는 모듈.
 """
+
 import json
 from pathlib import Path
 
@@ -29,8 +30,7 @@ def save_documents(docs: list[LegalDocument]) -> int:
     DOCS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
-        json.dumps(doc.model_dump(mode="json"), ensure_ascii=False)
-        for doc in docs
+        json.dumps(doc.model_dump(mode="json"), ensure_ascii=False) for doc in docs
     ]
     return atomic_append_jsonl(DOCS_PATH, lines)
 

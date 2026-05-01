@@ -18,6 +18,7 @@
   log = logging.getLogger(__name__)     # 각 모듈 상단
   log.info("KR law collected: %d docs", n)
 """
+
 from __future__ import annotations
 
 import logging

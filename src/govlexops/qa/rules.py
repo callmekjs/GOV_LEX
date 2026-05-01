@@ -2,6 +2,7 @@
 QA Rule Engine.
 문서가 저장되기 전에 통과해야 하는 품질 검사 룰.
 """
+
 from dataclasses import dataclass
 from datetime import date, datetime
 from govlexops.schemas.legal_document import LegalDocument
@@ -16,9 +17,10 @@ _MIN_VALID_YEAR = 1948
 @dataclass
 class QualityFailure:
     """품질 검사 실패 1건의 기록."""
+
     failure_id: str
-    rule_id: str          # R01, R02, R05
-    severity: str         # error, warning
+    rule_id: str  # R01, R02, R05
+    severity: str  # error, warning
     source_id: str
     timestamp: str = ""
     observed: str = ""
@@ -80,26 +82,30 @@ class QARuleEngine:
 
         # 1. 이번 실행 중 중복 체크
         if doc.content_hash in self._seen_this_run:
-            self.failures.append(QualityFailure(
-                failure_id=self._make_failure_id(),
-                rule_id="R01",
-                severity="error",
-                source_id=doc.source_id,
-                observed=f"이번 실행 중 중복: {doc.content_hash[:16]}...",
-                suggested_fix="동일 실행 내 중복 문서. 거부.",
-            ))
+            self.failures.append(
+                QualityFailure(
+                    failure_id=self._make_failure_id(),
+                    rule_id="R01",
+                    severity="error",
+                    source_id=doc.source_id,
+                    observed=f"이번 실행 중 중복: {doc.content_hash[:16]}...",
+                    suggested_fix="동일 실행 내 중복 문서. 거부.",
+                )
+            )
             return False
 
         # 2. 영구 저장소 중복 체크
         if self._use_persistent and is_seen(doc.content_hash):
-            self.failures.append(QualityFailure(
-                failure_id=self._make_failure_id(),
-                rule_id="R01",
-                severity="error",
-                source_id=doc.source_id,
-                observed=f"이전 실행에서 이미 수집된 문서: {doc.content_hash[:16]}...",
-                suggested_fix="이전 실행에서 이미 적재됨. 거부.",
-            ))
+            self.failures.append(
+                QualityFailure(
+                    failure_id=self._make_failure_id(),
+                    rule_id="R01",
+                    severity="error",
+                    source_id=doc.source_id,
+                    observed=f"이전 실행에서 이미 수집된 문서: {doc.content_hash[:16]}...",
+                    suggested_fix="이전 실행에서 이미 적재됨. 거부.",
+                )
+            )
             return False
 
         # 3. 통과 → 이번 실행 메모리에만 추가 (영구 저장은 commit 단계로 지연)
@@ -119,14 +125,16 @@ class QARuleEngine:
             missing.append("content_hash")
 
         if missing:
-            self.failures.append(QualityFailure(
-                failure_id=self._make_failure_id(),
-                rule_id="R02",
-                severity="error",
-                source_id=doc.source_id or "(unknown)",
-                observed=f"결측 필드: {', '.join(missing)}",
-                suggested_fix="필수 필드를 채운 후 재수집.",
-            ))
+            self.failures.append(
+                QualityFailure(
+                    failure_id=self._make_failure_id(),
+                    rule_id="R02",
+                    severity="error",
+                    source_id=doc.source_id or "(unknown)",
+                    observed=f"결측 필드: {', '.join(missing)}",
+                    suggested_fix="필수 필드를 채운 후 재수집.",
+                )
+            )
             return False
         return True
 
@@ -155,7 +163,8 @@ class QARuleEngine:
             raw = doc.metadata.get("raw_issued_date", "")
             reasons.append(
                 f"수집기 측 발행일 파싱 실패 (raw='{raw}')"
-                if raw else "수집기 측 발행일 파싱 실패"
+                if raw
+                else "수집기 측 발행일 파싱 실패"
             )
         if year < _MIN_VALID_YEAR:
             reasons.append(f"발행 연도 비정상: {year} (< {_MIN_VALID_YEAR})")
@@ -163,14 +172,16 @@ class QARuleEngine:
             reasons.append(f"발행 연도 비정상: {year} (미래 날짜)")
 
         if reasons:
-            self.failures.append(QualityFailure(
-                failure_id=self._make_failure_id(),
-                rule_id="R07",
-                severity="error",
-                source_id=doc.source_id or "(unknown)",
-                observed=" / ".join(reasons),
-                suggested_fix="원본 응답의 발행일자 필드 확인 후 재수집.",
-            ))
+            self.failures.append(
+                QualityFailure(
+                    failure_id=self._make_failure_id(),
+                    rule_id="R07",
+                    severity="error",
+                    source_id=doc.source_id or "(unknown)",
+                    observed=" / ".join(reasons),
+                    suggested_fix="원본 응답의 발행일자 필드 확인 후 재수집.",
+                )
+            )
             return False
         return True
 
@@ -182,14 +193,16 @@ class QARuleEngine:
         if title_key in self._seen_titles:
             first_date = self._seen_titles[title_key]
             if first_date != doc_date:
-                self.failures.append(QualityFailure(
-                    failure_id=self._make_failure_id(),
-                    rule_id="R05",
-                    severity="warning",
-                    source_id=doc.source_id,
-                    observed=f"제목 동일, 날짜 다름: {first_date} vs {doc_date}",
-                    suggested_fix="날짜 확인 후 병합 또는 검토.",
-                ))
+                self.failures.append(
+                    QualityFailure(
+                        failure_id=self._make_failure_id(),
+                        rule_id="R05",
+                        severity="warning",
+                        source_id=doc.source_id,
+                        observed=f"제목 동일, 날짜 다름: {first_date} vs {doc_date}",
+                        suggested_fix="날짜 확인 후 병합 또는 검토.",
+                    )
+                )
                 return False
         else:
             self._seen_titles[title_key] = doc_date
@@ -240,11 +253,13 @@ class QARuleEngine:
                 continue
             if is_seen(doc.content_hash):
                 continue
-            records.append({
-                "content_hash": doc.content_hash,
-                "source_id": doc.source_id,
-                "jurisdiction": doc.jurisdiction,
-            })
+            records.append(
+                {
+                    "content_hash": doc.content_hash,
+                    "source_id": doc.source_id,
+                    "jurisdiction": doc.jurisdiction,
+                }
+            )
 
         if not records:
             return 0

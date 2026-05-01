@@ -2,6 +2,7 @@
 GovLex-Ops 표준 데이터 양식 (Canonical Schema).
 모든 문서는 이 양식을 통과해야 저장됩니다.
 """
+
 from datetime import datetime, date
 from typing import Any
 from pydantic import BaseModel, Field

@@ -2,6 +2,7 @@
 미국 Congress.gov API v3 수집기.
 회기별 bill 목록 API로 대량 수집하거나, 지정 법안을 개별 조회합니다.
 """
+
 import logging
 import os
 from datetime import date
@@ -9,6 +10,7 @@ from datetime import date
 from dotenv import load_dotenv
 
 from govlexops.core.http import HTTPError, get_json
+from govlexops.core.raw_store import save_raw_response
 from govlexops.schemas.legal_document import LegalDocument, make_content_hash
 
 log = logging.getLogger(__name__)
@@ -39,15 +41,20 @@ KNOWN_AI_BILLS = [
 ]
 
 
-def _introduced_in_window(doc: LegalDocument) -> bool:
+def _introduced_in_window(doc: LegalDocument, min_intro_year: int) -> bool:
     """연도 정책 필터. 단, 파싱 실패 표지가 있는 문서는 통과시켜
     QA의 R07이 명시적으로 격리하도록 한다 [0-4]."""
     if doc.metadata.get("date_parse_failed") is True:
         return True
-    return doc.issued_date.year >= _MIN_INTRO_YEAR
+    return doc.issued_date.year >= min_intro_year
 
 
-def _fetch_bills_from_congress_list(congress: int, max_count: int) -> list[LegalDocument]:
+def _fetch_bills_from_congress_list(
+    congress: int,
+    max_count: int,
+    min_intro_year: int,
+    save_raw: bool = False,
+) -> list[LegalDocument]:
     """GET /v3/bill/{congress} 목록으로 페이지네이션 수집."""
     api_key = os.getenv("CONGRESS_GOV_API_KEY")
     if not api_key:
@@ -73,6 +80,12 @@ def _fetch_bills_from_congress_list(congress: int, max_count: int) -> list[Legal
             params=params,
             timeout=90,
         )
+        if save_raw:
+            save_raw_response(
+                data,
+                source="us_congress",
+                key=f"list_{congress}_offset_{offset}",
+            )
         bills = data.get("bills", [])
         if not bills:
             break
@@ -83,7 +96,7 @@ def _fetch_bills_from_congress_list(congress: int, max_count: int) -> list[Legal
                 continue
             try:
                 doc = _convert_to_document(raw)
-                if _introduced_in_window(doc):
+                if _introduced_in_window(doc, min_intro_year):
                     docs.append(doc)
             except Exception as e:
                 log.warning("⚠️ US list item convert failed: err=%s", e)
@@ -119,6 +132,8 @@ def fetch_bills(
     #   - 대량 수집:   페이지네이션 + offset 활용
     max_count: int = 250,
     congress: int = 118,
+    min_intro_year: int | None = None,
+    save_raw: bool = False,
 ) -> list[LegalDocument]:
     """
     회기별 bill 목록으로 대량 수집. 발의일이 최근 `_MIN_INTRO_YEAR` 이후인 것만 유지.
@@ -127,12 +142,20 @@ def fetch_bills(
     if not api_key:
         raise ValueError(".env에 CONGRESS_GOV_API_KEY가 없습니다.")
 
+    intro_year = min_intro_year if min_intro_year is not None else _MIN_INTRO_YEAR
+
     log.info(
         "→ US Congress bill list fetch: congress=%d max=%d",
-        congress, max_count,
+        congress,
+        max_count,
     )
 
-    docs = _fetch_bills_from_congress_list(congress=congress, max_count=max_count)
+    docs = _fetch_bills_from_congress_list(
+        congress=congress,
+        max_count=max_count,
+        min_intro_year=intro_year,
+        save_raw=save_raw,
+    )
 
     # 목록이 비면 지정 법안으로 폴백
     if not docs:
@@ -152,10 +175,16 @@ def fetch_bills(
                     params={"api_key": api_key, "format": "json"},
                     timeout=60,
                 )
+                if save_raw:
+                    save_raw_response(
+                        payload,
+                        source="us_congress",
+                        key=f"fallback_{bill_info['congress']}_{bill_info['type']}_{bill_info['number']}",
+                    )
                 bill = payload.get("bill", {})
                 if bill:
                     doc = _convert_to_document(bill)
-                    if _introduced_in_window(doc):
+                    if _introduced_in_window(doc, intro_year):
                         docs.append(doc)
             except HTTPError as e:
                 # 404 (해당 의안 없음) 등은 정상적으로 다음 후보로 넘어감.
@@ -164,10 +193,12 @@ def fetch_bills(
                 log.warning("⚠️ US bill convert failed: bill=%s err=%s", bill_info, e)
 
     before = len(docs)
-    docs = [d for d in docs if _introduced_in_window(d)]
+    docs = [d for d in docs if _introduced_in_window(d, intro_year)]
     log.info(
         "✅ US bill year filter (>=%d): %d docs (before filter: %d)",
-        _MIN_INTRO_YEAR, len(docs), before,
+        intro_year,
+        len(docs),
+        before,
     )
     return docs
 
@@ -212,7 +243,9 @@ def _convert_to_document(bill: dict) -> LegalDocument:
         metadata["date_parse_failed"] = True
         metadata["raw_issued_date"] = raw_date
 
-    chamber = "house" if bill_type in ("hr", "hres", "hjres", "hconres", "hjr") else "senate"
+    chamber = (
+        "house" if bill_type in ("hr", "hres", "hjres", "hconres", "hjr") else "senate"
+    )
     source_url = (
         f"https://congress.gov/bill/{congress}th-congress/{chamber}-bill/{bill_number}"
     )

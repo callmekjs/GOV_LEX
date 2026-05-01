@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.3
+    hooks:
+      - id: ruff
+        name: ruff (src)
+        files: ^src/
+      - id: ruff-format
+        name: ruff-format (src)
+        files: ^src/
+  - repo: local
+    hooks:
+      - id: sync-phase-docs
+        name: sync phase docs (masterplan/readme/worklog)
+        entry: python scripts/sync_phase_docs.py
+        language: system
+        files: ^masterplan\.md$
+        pass_filenames: false
