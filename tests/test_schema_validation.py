@@ -121,3 +121,52 @@ def test_content_hash_consistency():
 def test_content_hash_different():
     """다른 텍스트는 다른 해시를 만드는지"""
     assert make_content_hash("문서A") != make_content_hash("문서B")
+
+
+def test_make_content_hash_matches_documented_policy():
+    """
+    [pipline_upgrade 0-2] make_content_hash의 출력이
+    docs/schema_v1.md §6에 박제된 정의(NFC → 공백 단일화 → strip → SHA-256)와
+    정확히 일치하는지 잠근다.
+
+    이 테스트가 깨지면 schema_v1.md §6도 함께 갱신해야 한다.
+    """
+    import hashlib
+    import unicodedata
+    import re
+
+    # KR 법령 패턴: f"{title}_{공포일자YYYYMMDD}"
+    sample = "  인공지능 기본법_20260120  "  # 의도적으로 앞뒤 공백 + 연속 공백 변형 가능
+
+    # 문서화된 정규화 절차를 그대로 재현
+    expected = unicodedata.normalize("NFC", sample)
+    expected = re.sub(r"\s+", " ", expected).strip()
+    expected_hash = hashlib.sha256(expected.encode("utf-8")).hexdigest()
+
+    assert make_content_hash(sample) == expected_hash, (
+        "make_content_hash가 docs/schema_v1.md §6에 박제된 정규화 정의와 어긋난다."
+    )
+
+
+def test_make_content_hash_input_format_per_source():
+    """
+    [pipline_upgrade 0-2] 각 수집기가 사용하는 입력 형식이
+    docs/schema_v1.md §6-1 표와 일치하는지 회귀 방지.
+
+    실제 수집기 함수를 호출하지 않고, 표에 명시된 입력 식만 검증한다.
+    """
+    # KR 법령: title + 공포일자(YYYYMMDD)
+    kr_law_input = f"{'AI기본법'}_{'20260120'}"
+    assert make_content_hash(kr_law_input) == make_content_hash("AI기본법_20260120")
+
+    # KR 국회 법안: title + PPSL_DT digits + BILL_NO
+    kr_bill_input = f"{'AI법률안'}_{'20240515'}_{'2100123'}"
+    assert make_content_hash(kr_bill_input) == make_content_hash("AI법률안_20240515_2100123")
+
+    # US Congress: title + introducedDate + bill_number
+    us_bill_input = f"{'AI Act'}_{'2024-03-15'}_{'4763'}"
+    assert make_content_hash(us_bill_input) == make_content_hash("AI Act_2024-03-15_4763")
+
+    # 핵심: 같은 (title, date)지만 소스가 다르면 다른 해시여야 한다
+    # (정규화는 동일하지만 입력 식이 달라서 hash가 다름)
+    assert make_content_hash(kr_bill_input) != make_content_hash(us_bill_input)

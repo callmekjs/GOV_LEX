@@ -32,6 +32,7 @@ def generate_quality_report(
     lines.append(f"- 입력 문서: **{total_input}건**")
     lines.append(f"- 중복 거부 (R01): **{summary['R01']}건**")
     lines.append(f"- 결측 격리 (R02): **{summary['R02']}건**")
+    lines.append(f"- 비정상 날짜 격리 (R07): **{summary.get('R07', 0)}건**")
     lines.append(f"- 날짜 충돌 경고 (R05): **{summary['R05']}건**")
     lines.append(f"- 최종 저장: **{total_passed}건**")
     lines.append("")
@@ -46,10 +47,10 @@ def generate_quality_report(
     if failures:
         lines.append("## 실패 상세")
         lines.append("")
-        for f in failures:
+        for failure_item in failures:
             lines.append(
-                f"- **[{f['rule_id']}]** {f['source_id']}: "
-                f"{f['observed']}"
+                f"- **[{failure_item['rule_id']}]** {failure_item['source_id']}: "
+                f"{failure_item['observed']}"
             )
         lines.append("")
     else:
@@ -63,9 +64,9 @@ def generate_quality_report(
 
     # ── 이번 run 전용 실패 파일 ──
     failures_path = run_dir / "quality_failures.jsonl"
-    with open(failures_path, "w", encoding="utf-8") as f:
+    with open(failures_path, "w", encoding="utf-8") as fp:
         for failure in failures:
-            f.write(json.dumps(failure, ensure_ascii=False) + "\n")
+            fp.write(json.dumps(failure, ensure_ascii=False) + "\n")
 
     # ── 전역 누적 실패 파일 (운영 대시보드용) ──
     _append_to_global_failure_log(run_dir=run_dir, failures=failures)

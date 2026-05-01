@@ -56,7 +56,8 @@ def test_summary_counts():
     engine.validate(_make_doc(source_id="ok", content="유니크"))
     # 중복 1개
     engine.validate(_make_doc(source_id="dup", content="유니크"))
-    assert engine.get_summary() == {"R01": 1, "R02": 0, "R05": 0}
+    # [pipline_upgrade 0-4] R07 키 추가됨
+    assert engine.get_summary() == {"R01": 1, "R02": 0, "R07": 0, "R05": 0}
 
 
 def test_failures_list():
@@ -116,6 +117,196 @@ def test_r02_blocks_empty_content_hash():
     engine = QARuleEngine()
     assert engine.validate(doc) is False
     assert engine.get_summary()["R02"] == 1
+
+def test_r02_failure_does_not_mark_seen(tmp_path, monkeypatch):
+    """
+    [pipline_upgrade 0-1 회귀 방지]
+    R01은 통과해도 R02에서 거부된 문서는 영구 저장소(seen_store)에
+    절대 기록되어선 안 된다. (이게 박혀버리면 다음 실행에서 영원히 거부됨)
+    """
+    from govlexops.core import seen_store
+
+    # tmp_path로 격리: 진짜 seen_store 파일을 건드리지 않게
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None  # 모듈 캐시 리셋 (cwd 기준 다시 로드)
+
+    # R02 실패 문서: source_id 비어 있음. content_hash는 정상.
+    will_fail_hash = make_content_hash("R02에 걸려야 할 본문")
+    doc = LegalDocument(
+        source_id="",  # ← R02 결측 트리거
+        jurisdiction="KR",
+        source_type="minutes",
+        language="ko",
+        title="유효한 제목",
+        issued_date=date(2024, 1, 1),
+        source_url="https://example.com",
+        content_hash=will_fail_hash,
+    )
+
+    engine = QARuleEngine(use_persistent_store=True)
+    result = engine.validate(doc)
+
+    # 1. R02에서 거부됐는지
+    assert result is False
+    assert engine.get_summary()["R02"] == 1
+
+    # 2. 핵심: 영구 저장소에 그 해시가 절대 들어가면 안 된다
+    seen_store._seen = None  # 캐시 리셋해서 디스크에서 다시 읽도록
+    assert seen_store.is_seen(will_fail_hash) is False, (
+        "R02에서 거부된 문서의 content_hash가 영구 저장소에 잘못 기록됨. "
+        "0-1 버그가 회귀했다."
+    )
+
+
+def test_commit_seen_for_passed_only_persists_after_save(tmp_path, monkeypatch):
+    """
+    [pipline_upgrade 0-1 회귀 방지]
+    validate()만으로는 영구 저장소에 기록되지 않고,
+    commit_seen_for_passed()를 호출해야만 영구 저장된다.
+    """
+    from govlexops.core import seen_store
+
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = _make_doc(source_id="persist_me", content="저장될 본문")
+    engine = QARuleEngine(use_persistent_store=True)
+
+    # 1. validate만 호출 → 통과는 하지만 영구 저장은 X
+    assert engine.validate(doc) is True
+    seen_store._seen = None  # 디스크에서 다시 읽도록 캐시 리셋
+    assert seen_store.is_seen(doc.content_hash) is False, (
+        "validate만으로 영구 저장에 기록됨. "
+        "save 성공 전에 mark_seen이 호출되는 0-1 버그 회귀."
+    )
+
+    # 2. commit 호출 → 영구 저장됨
+    committed = engine.commit_seen_for_passed([doc])
+    assert committed == 1
+
+    seen_store._seen = None
+    assert seen_store.is_seen(doc.content_hash) is True
+
+
+def test_commit_seen_for_passed_idempotent(tmp_path, monkeypatch):
+    """
+    [pipline_upgrade 0-1 부속]
+    같은 문서를 두 번 commit해도 영구 저장소에 두 번 기록되지 않고,
+    두 번째 호출의 새 기록 카운트는 0이다.
+    """
+    from govlexops.core import seen_store
+
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = _make_doc(source_id="once", content="한번만 저장")
+    engine = QARuleEngine(use_persistent_store=True)
+    engine.validate(doc)
+
+    first = engine.commit_seen_for_passed([doc])
+    second = engine.commit_seen_for_passed([doc])
+
+    assert first == 1
+    assert second == 0  # 이미 있는 해시는 새로 기록되지 않아야 함
+
+
+def test_r07_blocks_year_below_1948(tmp_path, monkeypatch):
+    """[pipline_upgrade 0-4] 1948년 미만 발행일은 격리.
+
+    수집기가 폴백으로 박는 sentinel(date(1900,1,1))이 자동으로 잡힌다.
+    """
+    from govlexops.core import seen_store
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = LegalDocument(
+        source_id="ancient_doc",
+        jurisdiction="KR",
+        source_type="law",
+        language="ko",
+        title="고대 법령",
+        issued_date=date(1900, 1, 1),  # ← sentinel
+        source_url="https://example.com",
+        content_hash=make_content_hash("ancient"),
+    )
+
+    engine = QARuleEngine(use_persistent_store=False)
+    assert engine.validate(doc) is False
+    summary = engine.get_summary()
+    assert summary["R07"] == 1
+    # R07 실패 시 R05는 실행되지 않는다 (validate가 False 반환 후 종료)
+    assert summary["R05"] == 0
+
+
+def test_r07_blocks_future_date(tmp_path, monkeypatch):
+    """[pipline_upgrade 0-4] today+1 초과 미래 날짜는 격리."""
+    from govlexops.core import seen_store
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = LegalDocument(
+        source_id="future_doc",
+        jurisdiction="US",
+        source_type="bill",
+        language="en",
+        title="Future Bill",
+        issued_date=date(9999, 1, 1),
+        source_url="https://example.com",
+        content_hash=make_content_hash("future"),
+    )
+
+    engine = QARuleEngine(use_persistent_store=False)
+    assert engine.validate(doc) is False
+    assert engine.get_summary()["R07"] == 1
+
+
+def test_r07_blocks_when_metadata_flag_set(tmp_path, monkeypatch):
+    """[pipline_upgrade 0-4] metadata.date_parse_failed=True면
+    issued_date 자체가 정상 범위라도 격리한다.
+
+    수집기가 raw 응답에서 발행일을 파싱하지 못한 경우의 명시적 표지.
+    """
+    from govlexops.core import seen_store
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = LegalDocument(
+        source_id="parse_failed_doc",
+        jurisdiction="KR",
+        source_type="bill",
+        language="ko",
+        title="파싱 실패 의안",
+        issued_date=date(2024, 5, 15),  # 자체로는 정상이지만…
+        source_url="https://example.com",
+        content_hash=make_content_hash("parse fail"),
+        metadata={
+            "date_parse_failed": True,
+            "raw_issued_date": "이상한 날짜 형식",
+        },
+    )
+
+    engine = QARuleEngine(use_persistent_store=False)
+    assert engine.validate(doc) is False
+    summary = engine.get_summary()
+    assert summary["R07"] == 1
+    # 격리 사유에 raw 값이 포함되어야 한다 (운영 추적성)
+    failures = engine.get_failures()
+    r07_fail = next(f for f in failures if f["rule_id"] == "R07")
+    assert "이상한 날짜 형식" in r07_fail["observed"]
+
+
+def test_r07_passes_normal_date(tmp_path, monkeypatch):
+    """[pipline_upgrade 0-4] 1948 ~ today+1 범위 + 파싱 표지 없음 → 통과."""
+    from govlexops.core import seen_store
+    monkeypatch.chdir(tmp_path)
+    seen_store._seen = None
+
+    doc = _make_doc(content="ok normal", issued_date=date(2024, 5, 15))
+    engine = QARuleEngine(use_persistent_store=False)
+
+    assert engine.validate(doc) is True
+    assert engine.get_summary()["R07"] == 0
+
 
 def test_global_failure_log_is_cumulative(tmp_path, monkeypatch):
     """

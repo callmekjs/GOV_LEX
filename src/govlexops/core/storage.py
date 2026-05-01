@@ -3,8 +3,9 @@
 """
 import json
 from pathlib import Path
-from govlexops.schemas.legal_document import LegalDocument
 
+from govlexops.core.atomic import atomic_append_jsonl
+from govlexops.schemas.legal_document import LegalDocument
 
 DOCS_PATH = Path("data_index/normalized/docs.jsonl")
 
@@ -12,18 +13,26 @@ DOCS_PATH = Path("data_index/normalized/docs.jsonl")
 def save_documents(docs: list[LegalDocument]) -> int:
     """
     LegalDocument 목록을 docs.jsonl에 추가 저장합니다.
-    반환값: 저장된 건수
+
+    [pipline_upgrade 0-6]
+    원자적 쓰기:
+      이전엔 open(path, "a")로 직접 append했다. 도중에 죽으면 반쪽 파일.
+      이제 staging → atomic rename 패턴으로 교체. 도중에 죽어도 docs.jsonl은
+      이전 상태 그대로 유지된다.
+
+    반환값:
+      실제로 저장된 건수. (입력 docs 길이와 같음)
     """
+    if not docs:
+        return 0
+
     DOCS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    count = 0
-    with open(DOCS_PATH, "a", encoding="utf-8") as f:
-        for doc in docs:
-            f.write(
-                json.dumps(doc.model_dump(mode="json"), ensure_ascii=False) + "\n"
-            )
-            count += 1
-    return count
+    lines = [
+        json.dumps(doc.model_dump(mode="json"), ensure_ascii=False)
+        for doc in docs
+    ]
+    return atomic_append_jsonl(DOCS_PATH, lines)
 
 
 def load_documents() -> list[dict]:
